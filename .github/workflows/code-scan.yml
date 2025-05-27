@@ -10,9 +10,35 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Compile with Delphi
+        shell: powershell
         run: |
-          & "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE" `
-          "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
+          $dccPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE"
+          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
+          
+          Write-Host "Checking if DCC32.EXE exists..."
+          if (-not (Test-Path $dccPath)) {
+            Write-Host "ERROR: DCC32.EXE not found at: $dccPath"
+            exit 1
+          }
+          
+          Write-Host "Checking if project file exists..."
+          if (-not (Test-Path $projectPath)) {
+            Write-Host "ERROR: Project file not found at: $projectPath"
+            exit 1
+          }
+          
+          Write-Host "Starting compilation..."
+          Write-Host "DCC32 Path: $dccPath"
+          Write-Host "Project Path: $projectPath"
+          
+          & $dccPath $projectPath
+          
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Compilation failed with exit code: $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          
+          Write-Host "Compilation completed successfully!"
       - name: Run Pascal Analyzer (HTML + SARIF)
         run: |
           & "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe" `
@@ -20,11 +46,26 @@ jobs:
             /OUTPUT="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" `
             /SARIF="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
       - name: Upload HTML Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: pascal-analysis-html
-          path: MultiSubnetFailoverTest/analysis-output.html
-      - name: Upload SARIF Report to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: MultiSubnetFailoverTest/results.sarif
+        shell: powershell
+        run: |
+          # Create artifacts directory if it doesn't exist
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\artifacts"
+          # Copy the HTML report to artifacts directory
+          if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html") {
+            Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" "$env:GITHUB_WORKSPACE\artifacts\"
+            Write-Host "HTML report saved to artifacts directory"
+          } else {
+            Write-Host "HTML report not found"
+          }
+      - name: Save SARIF Report
+        shell: powershell
+        run: |
+          # Copy the SARIF report to artifacts directory
+          if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif") {
+            Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" "$env:GITHUB_WORKSPACE\artifacts\"
+            Write-Host "SARIF report saved to artifacts directory"
+            # Display SARIF content for debugging
+            Get-Content "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" | Write-Host
+          } else {
+            Write-Host "SARIF report not found"
+          }
