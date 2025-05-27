@@ -12,8 +12,9 @@ jobs:
       - name: Compile with Delphi
         shell: powershell
         run: |
-          $dccPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE"
-          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
+          $dccPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE"  
+          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dproj"
+          $studioPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0"
           
           Write-Host "Checking if DCC32.EXE exists..."
           if (-not (Test-Path $dccPath)) {
@@ -27,15 +28,48 @@ jobs:
             exit 1
           }
           
-          Write-Host "Starting compilation..."
+          Write-Host "Starting compilation with library paths..."
           Write-Host "DCC32 Path: $dccPath"
           Write-Host "Project Path: $projectPath"
           
-          & $dccPath $projectPath
+          # Set library paths for VCL and RTL
+          $libraryPaths = @(
+            "$studioPath\lib\Win32\release",
+            "$studioPath\lib\Win32\debug", 
+            "$studioPath\source\rtl\common",
+            "$studioPath\source\rtl\win",
+            "$studioPath\source\vcl"
+          )
+          
+          $unitPath = ($libraryPaths -join ";")
+          
+          & $dccPath -U"$unitPath" -I"$unitPath" -R"$unitPath" $projectPath
           
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Compilation failed with exit code: $LASTEXITCODE"
-            exit $LASTEXITCODE
+            Write-Host "Trying alternative library paths..."
+            
+            # Try with Delphi 11 Alexandria paths (alternative locations)
+            $altLibraryPaths = @(
+              "$studioPath\lib\win32\release",
+              "$studioPath\lib\win32\debug",
+              "$studioPath\source\rtl\sys",
+              "$studioPath\source\rtl\common", 
+              "$studioPath\source\vcl",
+              "$studioPath\source\fmx"
+            )
+            
+            $altUnitPath = ($altLibraryPaths -join ";")
+            Write-Host "Alternative unit paths: $altUnitPath"
+            
+            & $dccPath -U"$altUnitPath" -I"$altUnitPath" -R"$altUnitPath" $projectPath
+            
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Compilation still failed. Checking available library directories..."
+              Get-ChildItem "$studioPath\lib" -Recurse -Directory | Select-Object FullName
+              Get-ChildItem "$studioPath\source" -Recurse -Directory | Select-Object FullName | Select-Object -First 10
+              exit $LASTEXITCODE
+            }
           }
           
           Write-Host "Compilation completed successfully!"
