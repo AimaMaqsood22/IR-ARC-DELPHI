@@ -8,7 +8,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, Delphi-1]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Compile with Delphi
         run: |
           "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE" ^
@@ -20,7 +20,7 @@ jobs:
             /OUTPUT="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\analysis-output.html" ^
             /SARIF="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\results.sarif"
       - name: Upload HTML Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pascal-analysis-html
           path: MultiSubnetFailoverTest/analysis-output.html
