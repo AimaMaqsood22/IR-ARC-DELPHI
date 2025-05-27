@@ -7,7 +7,7 @@ on:
 
 jobs:
   code-scan:
-    runs-on: self-hosted
+   runs-on: self-hosted Windows X64 Delphi-1
 
     steps:
       - name: Checkout code
