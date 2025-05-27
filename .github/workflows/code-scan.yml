@@ -11,14 +11,14 @@ jobs:
         uses: actions/checkout@v4
       - name: Compile with Delphi
         run: |
-          "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE" ^
-          "%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\Project1.dpr"
+          & "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE" `
+          "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
       - name: Run Pascal Analyzer (HTML + SARIF)
         run: |
-          "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe" ^
-            /PROJECT="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\Project1.dpr" ^
-            /OUTPUT="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\analysis-output.html" ^
-            /SARIF="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\results.sarif"
+          & "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe" `
+            /PROJECT="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr" `
+            /OUTPUT="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" `
+            /SARIF="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
       - name: Upload HTML Report
         uses: actions/upload-artifact@v4
         with:
