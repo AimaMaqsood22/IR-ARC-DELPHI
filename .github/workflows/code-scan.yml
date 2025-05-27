@@ -13,7 +13,7 @@ jobs:
         shell: powershell
         run: |
           $dccPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE"  
-          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dproj"
+          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
           $studioPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0"
           
           Write-Host "Checking if DCC32.EXE exists..."
@@ -22,20 +22,22 @@ jobs:
             exit 1
           }
           
-          Write-Host "Checking if project file exists..."
+          Write-Host "Checking if .dpr project file exists..."
           if (-not (Test-Path $projectPath)) {
-            Write-Host "ERROR: Project file not found at: $projectPath"
+            Write-Host "ERROR: Project1.dpr file not found at: $projectPath"
+            Write-Host "Looking for available files..."
+            Get-ChildItem "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\*" -Include "*.dpr", "*.dproj", "*.pas" | Select-Object Name, FullName
             exit 1
           }
           
-          Write-Host "Starting compilation with library paths..."
+          Write-Host "Starting compilation with .dpr file..."
           Write-Host "DCC32 Path: $dccPath"
           Write-Host "Project Path: $projectPath"
           
           # Set library paths for VCL and RTL
           $libraryPaths = @(
-            "$studioPath\lib\Win32\release",
-            "$studioPath\lib\Win32\debug", 
+            "$studioPath\lib\win32\release",
+            "$studioPath\lib\win32\debug", 
             "$studioPath\source\rtl\common",
             "$studioPath\source\rtl\win",
             "$studioPath\source\vcl"
@@ -43,31 +45,26 @@ jobs:
           
           $unitPath = ($libraryPaths -join ";")
           
+          # Use .dpr file (NOT .dproj)
           & $dccPath -U"$unitPath" -I"$unitPath" -R"$unitPath" $projectPath
           
           if ($LASTEXITCODE -ne 0) {
             Write-Host "Compilation failed with exit code: $LASTEXITCODE"
-            Write-Host "Trying alternative library paths..."
+            Write-Host "Trying MSBuild with .dproj file instead..."
             
-            # Try with Delphi 11 Alexandria paths (alternative locations)
-            $altLibraryPaths = @(
-              "$studioPath\lib\win32\release",
-              "$studioPath\lib\win32\debug",
-              "$studioPath\source\rtl\sys",
-              "$studioPath\source\rtl\common", 
-              "$studioPath\source\vcl",
-              "$studioPath\source\fmx"
-            )
+            $msbuildPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\msbuild.exe"
+            $dprojPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dproj"
             
-            $altUnitPath = ($altLibraryPaths -join ";")
-            Write-Host "Alternative unit paths: $altUnitPath"
-            
-            & $dccPath -U"$altUnitPath" -I"$altUnitPath" -R"$altUnitPath" $projectPath
-            
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "Compilation still failed. Checking available library directories..."
-              Get-ChildItem "$studioPath\lib" -Recurse -Directory | Select-Object FullName
-              Get-ChildItem "$studioPath\source" -Recurse -Directory | Select-Object FullName | Select-Object -First 10
+            if (Test-Path $msbuildPath -and (Test-Path $dprojPath)) {
+              Write-Host "Using MSBuild with .dproj file..."
+              & $msbuildPath $dprojPath /p:Configuration=Release /p:Platform=Win32
+              
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "MSBuild also failed with exit code: $LASTEXITCODE"
+                exit $LASTEXITCODE
+              }
+            } else {
+              Write-Host "MSBuild or .dproj file not found"
               exit $LASTEXITCODE
             }
           }
