@@ -1,0 +1,38 @@
+name: Delphi Code Scan
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  code-scan:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Compile with Delphi
+        run: |
+          "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE" ^
+          "%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\Project1.dpr"
+
+      - name: Run Pascal Analyzer (HTML + SARIF)
+        run: |
+          "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe" ^
+            /PROJECT="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\Project1.dpr" ^
+            /OUTPUT="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\analysis-output.html" ^
+            /SARIF="%GITHUB_WORKSPACE%\MultiSubnetFailoverTest\results.sarif"
+
+      - name: Upload HTML Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: pascal-analysis-html
+          path: MultiSubnetFailoverTest/analysis-output.html
+
+      - name: Upload SARIF Report to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: MultiSubnetFailoverTest/results.sarif
+
