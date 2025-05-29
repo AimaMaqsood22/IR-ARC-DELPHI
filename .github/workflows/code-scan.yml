@@ -12,7 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Compile with Delphi MSBuild
+            - name: Compile with Delphi MSBuild
         shell: powershell
         run: |
           $studioPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0"
@@ -20,7 +20,6 @@ jobs:
 
           # Find .dproj file
           $dprojFile = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.dproj | Select-Object -First 1
-
           if (-not $dprojFile) {
             Write-Host "ERROR: No .dproj file found."
             exit 1
@@ -34,12 +33,10 @@ jobs:
             exit 1
           }
 
-          # Use rsvars.bat to load Delphi environment and then run MSBuild
-          $cmd = "`"$rsvarsPath`" && msbuild `"$dprojPath`" /p:Config=Release /p:Platform=Win32"
-          cmd.exe /c $cmd
-
+          # Proper CMD string with quoted paths
+          $cmd = "`"`"$rsvarsPath`"`" && msbuild `"`"$dprojPath`"`" /p:Config=Release /p:Platform=Win32"
           Write-Host "Running Delphi MSBuild with rsvars.bat..."
-          Invoke-Expression $cmd
+          cmd.exe /c $cmd
 
           if ($LASTEXITCODE -ne 0) {
             Write-Host "ERROR: Delphi MSBuild failed with exit code $LASTEXITCODE"
@@ -47,6 +44,7 @@ jobs:
           }
 
           Write-Host "Compilation completed successfully!"
+
 
       - name: Run Pascal Analyzer (HTML + SARIF)
         run: |
