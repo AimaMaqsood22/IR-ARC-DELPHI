@@ -12,7 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-            - name: Compile with Delphi MSBuild
+      - name: Compile with Delphi MSBuild
         shell: powershell
         run: |
           $studioPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0"
