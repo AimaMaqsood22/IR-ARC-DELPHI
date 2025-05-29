@@ -55,7 +55,7 @@ jobs:
             $msbuildPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\msbuild.exe"
             $dprojPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dproj"
             
-            if (Test-Path $msbuildPath -and (Test-Path $dprojPath)) {
+           if ((Test-Path $msbuildPath) -and (Test-Path $dprojPath)) {
               Write-Host "Using MSBuild with .dproj file..."
               & $msbuildPath $dprojPath /p:Configuration=Release /p:Platform=Win32
               
