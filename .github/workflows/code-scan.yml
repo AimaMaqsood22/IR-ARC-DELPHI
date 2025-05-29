@@ -1,110 +1,75 @@
 name: Delphi Code Scan
+
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+
 jobs:
   code-scan:
     runs-on: [self-hosted, Windows, X64, Delphi-1]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Compile with Delphi
+
+      - name: Compile with Delphi MSBuild
         shell: powershell
         run: |
-          $dccPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\DCC32.EXE"  
-          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
           $studioPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0"
-          
-          Write-Host "Checking if DCC32.EXE exists..."
-          if (-not (Test-Path $dccPath)) {
-            Write-Host "ERROR: DCC32.EXE not found at: $dccPath"
-            exit 1
-          }
-          
-          Write-Host "Checking if .dpr project file exists..."
-          if (-not (Test-Path $projectPath)) {
-            Write-Host "ERROR: Project1.dpr file not found at: $projectPath"
-            Write-Host "Looking for available files..."
-            Get-ChildItem "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\*" -Include "*.dpr", "*.dproj", "*.pas" | Select-Object Name, FullName
-            exit 1
-          }
-          
-          Write-Host "Starting compilation with .dpr file..."
-          Write-Host "DCC32 Path: $dccPath"
-          Write-Host "Project Path: $projectPath"
-          
-          # Set library paths for VCL and RTL
-          $libraryPaths = @(
-            "$studioPath\lib\win32\release",
-            "$studioPath\lib\win32\debug", 
-            "$studioPath\source\rtl\common",
-            "$studioPath\source\rtl\win",
-            "$studioPath\source\vcl"
-          )
+          $rsvarsPath = "$studioPath\bin\rsvars.bat"
 
-          foreach ($p in $libraryPaths) {
-            Write-Host "Checking library path: $p => Exists: $(Test-Path $p)"
+          # Find .dproj file
+          $dprojFile = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.dproj | Select-Object -First 1
+
+          if (-not $dprojFile) {
+            Write-Host "ERROR: No .dproj file found."
+            exit 1
           }
-          
-          $unitPath = ($libraryPaths -join ";")
-          
-          # Use .dpr file (NOT .dproj)
-          & $dccPath -U"$unitPath" -I"$unitPath" -R"$unitPath" $projectPath
-          
+
+          $dprojPath = $dprojFile.FullName
+          Write-Host "Found .dproj: $dprojPath"
+
+          if (-not (Test-Path $rsvarsPath)) {
+            Write-Host "ERROR: rsvars.bat not found at $rsvarsPath"
+            exit 1
+          }
+
+          # Use rsvars.bat to load Delphi environment and then run MSBuild
+          $cmd = "cmd.exe /c `"$rsvarsPath && msbuild `"$dprojPath`" /p:Config=Release /p:Platform=Win32`""
+          Write-Host "Running Delphi MSBuild with rsvars.bat..."
+          Invoke-Expression $cmd
+
           if ($LASTEXITCODE -ne 0) {
-            Write-Host "Compilation failed with exit code: $LASTEXITCODE"
-            Write-Host "Trying MSBuild with .dproj file instead..."
-            
-            $msbuildPath = "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
-            $dprojPath = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.dproj | Select-Object -First 1
-
-            if ($dprojPath) {
-              $dprojPath = $dprojPath.FullName
-            }
-
-            
-           if ((Test-Path $msbuildPath) -and (Test-Path $dprojPath)) {
-              Write-Host "Using MSBuild with .dproj file..."
-              & $msbuildPath $dprojPath /p:Configuration=Release /p:Platform=Win32
-              
-              if ($LASTEXITCODE -ne 0) {
-                Write-Host "MSBuild also failed with exit code: $LASTEXITCODE"
-                exit $LASTEXITCODE
-              }
-            } else {
-              Write-Host "MSBuild or .dproj file not found"
-              exit $LASTEXITCODE
-            }
+            Write-Host "ERROR: Delphi MSBuild failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
           }
-          
+
           Write-Host "Compilation completed successfully!"
+
       - name: Run Pascal Analyzer (HTML + SARIF)
         run: |
           & "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe" `
             /PROJECT="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr" `
             /OUTPUT="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" `
             /SARIF="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
+
       - name: Upload HTML Report
         shell: powershell
         run: |
-          # Create artifacts directory if it doesn't exist
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\artifacts"
-          # Copy the HTML report to artifacts directory
           if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html") {
             Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" "$env:GITHUB_WORKSPACE\artifacts\"
             Write-Host "HTML report saved to artifacts directory"
           } else {
             Write-Host "HTML report not found"
           }
+
       - name: Save SARIF Report
         shell: powershell
         run: |
-          # Copy the SARIF report to artifacts directory
           if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif") {
             Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" "$env:GITHUB_WORKSPACE\artifacts\"
             Write-Host "SARIF report saved to artifacts directory"
-            # Display SARIF content for debugging
             Get-Content "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" | Write-Host
           } else {
             Write-Host "SARIF report not found"
