@@ -42,6 +42,10 @@ jobs:
             "$studioPath\source\rtl\win",
             "$studioPath\source\vcl"
           )
+
+          foreach ($p in $libraryPaths) {
+            Write-Host "Checking library path: $p => Exists: $(Test-Path $p)"
+          }
           
           $unitPath = ($libraryPaths -join ";")
           
@@ -52,8 +56,13 @@ jobs:
             Write-Host "Compilation failed with exit code: $LASTEXITCODE"
             Write-Host "Trying MSBuild with .dproj file instead..."
             
-            $msbuildPath = "C:\Program Files (x86)\Embarcadero\Studio\22.0\bin\msbuild.exe"
-            $dprojPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dproj"
+            $msbuildPath = "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe"
+            $dprojPath = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.dproj | Select-Object -First 1
+
+            if ($dprojPath) {
+              $dprojPath = $dprojPath.FullName
+            }
+
             
            if ((Test-Path $msbuildPath) -and (Test-Path $dprojPath)) {
               Write-Host "Using MSBuild with .dproj file..."
