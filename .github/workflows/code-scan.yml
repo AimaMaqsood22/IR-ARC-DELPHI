@@ -126,7 +126,6 @@ jobs:
       - name: Convert Pascal Analyzer output to SARIF
         shell: powershell
         run: |
-          $modulePath = "C:\Program Files\WindowsPowerShell\Modules\ConvertToSARIF\1.0.0"
           $textOutputPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.txt"
           $sarifOutputPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
       
@@ -138,69 +137,174 @@ jobs:
             exit 1
           }
       
-          # Check if ConvertToSARIF module exists
-          if (-not (Test-Path "$modulePath\ConvertToSARIF.psd1")) {
-            Write-Host "WARNING: ConvertToSARIF module not found. Creating basic SARIF output..."
+          Write-Host "Converting Pascal Analyzer output to SARIF format..."
+          Write-Host "Input file: $textOutputPath"
+          Write-Host "Output file: $sarifOutputPath"
+      
+          # Read the Pascal Analyzer output
+          $lines = Get-Content $textOutputPath -ErrorAction SilentlyContinue
+          Write-Host "Read $($lines.Count) lines from Pascal Analyzer output"
+      
+          # Show first few lines for debugging
+          Write-Host "First 10 lines of Pascal Analyzer output:"
+          $lines | Select-Object -First 10 | ForEach-Object { Write-Host "  $_" }
+      
+          # Parse Pascal Analyzer output and create SARIF findings
+          $findings = @()
+          $lineNumber = 0
+          
+          foreach ($line in $lines) {
+            $lineNumber++
             
-            # Create a basic SARIF structure manually
-            $lines = Get-Content $textOutputPath -ErrorAction SilentlyContinue
+            # Try multiple patterns to match Pascal Analyzer output
+            $matched = $false
             
-            $findings = @()
-            foreach ($line in $lines) {
-              if ($line -match "^(.+)\((\d+)\):\s+(.+)$") {
-                $findings += @{
-                  ruleId = "PascalAnalyzerFinding"
-                  message = @{ text = $matches[3] }
-                  locations = @(@{
-                    physicalLocation = @{
-                      artifactLocation = @{ uri = $matches[1] }
-                      region = @{ startLine = [int]$matches[2] }
-                    }
-                  })
-                  level = "warning"
-                }
-              }
-            }
+            # Pattern 1: File(line): message
+            if ($line -match '^(.+?)\((\d+)\):\s*(.+)
             
-            $sarif = @{
-              '$schema' = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
-              version = "2.1.0"
-              runs = @(@{
-                tool = @{
-                  driver = @{
-                    name = "Pascal Analyzer"
-                    version = "9.0"
+      - name: Upload SARIF Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pascal-analyzer-sarif
+          path: MultiSubnetFailoverTest/results.sarif) {
+              $findings += @{
+                ruleId = "PascalAnalyzer.Finding"
+                message = @{ text = $matches[3].Trim() }
+                locations = @(@{
+                  physicalLocation = @{
+                    artifactLocation = @{ uri = $matches[1].Trim() }
+                    region = @{ startLine = [int]$matches[2] }
                   }
-                }
-                results = $findings
-              })
+                })
+                level = "warning"
+              }
+              $matched = $true
+            }
+            # Pattern 2: File:line: message
+            elseif ($line -match '^(.+?):(\d+):\s*(.+)
+            
+      - name: Upload SARIF Report2
+        uses: actions/upload-artifact@v4
+        with:
+          name: pascal-analyzer-sarif
+          path: MultiSubnetFailoverTest/results.sarif) {
+              $findings += @{
+                ruleId = "PascalAnalyzer.Finding"
+                message = @{ text = $matches[3].Trim() }
+                locations = @(@{
+                  physicalLocation = @{
+                    artifactLocation = @{ uri = $matches[1].Trim() }
+                    region = @{ startLine = [int]$matches[2] }
+                  }
+                })
+                level = "warning"
+              }
+              $matched = $true
+            }
+            # Pattern 3: Lines that contain "Warning", "Error", "Info" etc.
+            elseif ($line -match '(warning|error|info|note)[:]\s*(.+)', 'IgnoreCase') {
+              $severity = switch ($matches[1].ToLower()) {
+                "error" { "error" }
+                "warning" { "warning" }
+                "info" { "note" }
+                "note" { "note" }
+                default { "warning" }
+              }
+              
+              $findings += @{
+                ruleId = "PascalAnalyzer.General"
+                message = @{ text = $matches[2].Trim() }
+                locations = @(@{
+                  physicalLocation = @{
+                    artifactLocation = @{ uri = "Project1.dpr" }
+                    region = @{ startLine = 1 }
+                  }
+                })
+                level = $severity
+              }
+              $matched = $true
+            }
+            # Pattern 4: Any line that looks like it contains a file path
+            elseif ($line -match '\.pas|\.dpr|\.inc' -and $line.Trim() -ne '') {
+              $findings += @{
+                ruleId = "PascalAnalyzer.CodeIssue"
+                message = @{ text = $line.Trim() }
+                locations = @(@{
+                  physicalLocation = @{
+                    artifactLocation = @{ uri = "Project1.dpr" }
+                    region = @{ startLine = 1 }
+                  }
+                })
+                level = "info"
+              }
+              $matched = $true
             }
             
-            $sarif | ConvertTo-Json -Depth 10 | Out-File -FilePath $sarifOutputPath -Encoding UTF8
-            Write-Host "Basic SARIF report generated at $sarifOutputPath"
-            return
-          }
-      
-          # Use the ConvertToSARIF module if available
-          Import-Module "$modulePath\ConvertToSARIF.psd1" -Force
-          $lines = Get-Content $textOutputPath
-      
-          # Transform Pascal Analyzer output to a compatible object array
-          $results = foreach ($line in $lines) {
-            if ($line -match "^(.+)\((\d+)\):\s+(.+)$") {
-              [PSCustomObject]@{
-                RuleName = "PascalAnalyzerFinding"
-                Message  = $matches[3]
-                Line     = [int]$matches[2]
-                Path     = $matches[1]
-                Severity = "Warning"
-              }
+            if ($matched) {
+              Write-Host "  Parsed line $lineNumber`: $line"
             }
           }
       
-          # Use ConvertTo-SARIF (from the module)
-          $results | ConvertTo-SARIF -FilePath $sarifOutputPath
-          Write-Host "SARIF report generated using ConvertToSARIF module at $sarifOutputPath"
+          Write-Host "Created $($findings.Count) SARIF findings from Pascal Analyzer output"
+      
+          # Create the SARIF structure
+          $sarif = @{
+            '$schema' = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+            version = "2.1.0"
+            runs = @(@{
+              tool = @{
+                driver = @{
+                  name = "Pascal Analyzer"
+                  version = "9.0"
+                  informationUri = "https://www.peganza.com/products_pal.html"
+                  rules = @(
+                    @{
+                      id = "PascalAnalyzer.Finding"
+                      name = "PascalAnalyzerFinding"
+                      shortDescription = @{ text = "Pascal Analyzer Code Finding" }
+                      fullDescription = @{ text = "Code analysis finding from Pascal Analyzer" }
+                    },
+                    @{
+                      id = "PascalAnalyzer.General"
+                      name = "PascalAnalyzerGeneral"
+                      shortDescription = @{ text = "Pascal Analyzer General Issue" }
+                      fullDescription = @{ text = "General code analysis issue from Pascal Analyzer" }
+                    },
+                    @{
+                      id = "PascalAnalyzer.CodeIssue"
+                      name = "PascalAnalyzerCodeIssue"
+                      shortDescription = @{ text = "Pascal Analyzer Code Issue" }
+                      fullDescription = @{ text = "Code quality issue identified by Pascal Analyzer" }
+                    }
+                  )
+                }
+              }
+              results = $findings
+              columnKind = "utf16CodeUnits"
+            })
+          }
+          
+          # Convert to JSON and save
+          $sarifJson = $sarif | ConvertTo-Json -Depth 10
+          $sarifJson | Out-File -FilePath $sarifOutputPath -Encoding UTF8
+          
+          Write-Host "SARIF report generated successfully at: $sarifOutputPath"
+          Write-Host "Total findings: $($findings.Count)"
+          
+          # Verify the file was created and show its size
+          if (Test-Path $sarifOutputPath) {
+            $fileSize = (Get-Item $sarifOutputPath).Length
+            Write-Host "SARIF file size: $fileSize bytes"
+            
+            # Show a preview of the generated SARIF
+            Write-Host "SARIF preview (first 500 characters):"
+            $preview = Get-Content $sarifOutputPath -Raw
+            Write-Host $preview.Substring(0, [Math]::Min(500, $preview.Length))
+          } else {
+            Write-Host "ERROR: Failed to create SARIF file"
+            exit 1
+          }
+          
       - name: Upload SARIF Report
         uses: actions/upload-artifact@v4
         with:
