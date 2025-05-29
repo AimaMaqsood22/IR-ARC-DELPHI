@@ -40,28 +40,6 @@ jobs:
         shell: powershell
         run: |
           $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
-          $outputHtml = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html"
-          $outputSarif = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
-          $palcmdPath = "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe"
-      
-          if (-not (Test-Path $palcmdPath)) {
-            Write-Host "ERROR: palcmd.exe not found at: $palcmdPath"
-            exit 1
-          }
-      
-           & "$palcmdPath" "$projectPath" /TEXT:"$outputText"
-      
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Pascal Analyzer failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
-          }
-      
-          Write-Host " Pascal Analyzer completed successfully."
-          
-      - name: Run Pascal Analyzer2
-        shell: powershell
-        run: |
-          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
           $outputText = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.txt"
           $outputHtml = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html"
           $palcmdPath = "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe"
@@ -77,22 +55,88 @@ jobs:
             New-Item -ItemType Directory -Force -Path $outputDir
           }
       
+          Write-Host "Project path: $projectPath"
+          Write-Host "Expected output path: $outputText"
+          Write-Host "Output directory: $outputDir"
+      
+          # List files before running Pascal Analyzer
+          Write-Host "Files in output directory before analysis:"
+          Get-ChildItem $outputDir -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  - $($_.Name)" }
+      
           # Run Pascal Analyzer with TEXT output
           Write-Host "Running Pascal Analyzer..."
-          & "$palcmdPath" "$projectPath" /TEXT:"$outputText"
-      
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "ERROR: Pascal Analyzer failed with exit code $LASTEXITCODE"
-            exit $LASTEXITCODE
+          Write-Host "Command: & `"$palcmdPath`" `"$projectPath`" /TEXT:`"$outputText`""
+          
+          # Try different parameter formats
+          $exitCode = 0
+          try {
+            & "$palcmdPath" "$projectPath" /TEXT:"$outputText"
+            $exitCode = $LASTEXITCODE
+          } catch {
+            Write-Host "Error running Pascal Analyzer: $($_.Exception.Message)"
+            $exitCode = 1
           }
       
-          # Verify the output file was created
+          Write-Host "Pascal Analyzer exit code: $exitCode"
+      
+          # List all files in the output directory after running
+          Write-Host "Files in output directory after analysis:"
+          Get-ChildItem $outputDir -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  - $($_.Name) (Size: $($_.Length) bytes)" }
+      
+          # Also check the project directory for any output files
+          $projectDir = Split-Path $projectPath -Parent
+          Write-Host "Files in project directory:"
+          Get-ChildItem $projectDir -Filter "*.txt" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  - $($_.Name) (Size: $($_.Length) bytes)" }
+      
+          # Look for any .txt files that might be the output
+          $allTxtFiles = Get-ChildItem $outputDir -Filter "*.txt" -ErrorAction SilentlyContinue
+          if ($allTxtFiles.Count -gt 0) {
+            Write-Host "Found .txt files in output directory:"
+            foreach ($file in $allTxtFiles) {
+              Write-Host "  - $($file.Name) (Size: $($file.Length) bytes)"
+              if ($file.Length -gt 0) {
+                Write-Host "    First few lines:"
+                Get-Content $file.FullName -TotalCount 5 | ForEach-Object { Write-Host "      $_" }
+              }
+            }
+          }
+      
+          # Try alternative parameter syntax if the file wasn't created
+          if (-not (Test-Path $outputText)) {
+            Write-Host "Trying alternative parameter syntax..."
+            & "$palcmdPath" "$projectPath" /TEXT $outputText
+            $exitCode = $LASTEXITCODE
+            Write-Host "Alternative syntax exit code: $exitCode"
+          }
+      
+          # Check if file exists now
+          if (-not (Test-Path $outputText)) {
+            # Try without quotes around the output path
+            Write-Host "Trying without quotes around output path..."
+            $shortOutputPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\output.txt"
+            & "$palcmdPath" "$projectPath" /TEXT:$shortOutputPath
+            $exitCode = $LASTEXITCODE
+            
+            if (Test-Path $shortOutputPath) {
+              Write-Host "Found output at alternative path: $shortOutputPath"
+              Copy-Item $shortOutputPath $outputText
+            }
+          }
+      
+          if ($exitCode -ne 0) {
+            Write-Host "ERROR: Pascal Analyzer failed with exit code $exitCode"
+            exit $exitCode
+          }
+      
+          # Final check
           if (-not (Test-Path $outputText)) {
             Write-Host "ERROR: Pascal Analyzer output file not created at: $outputText"
+            Write-Host "Please check the Pascal Analyzer documentation for correct TEXT output syntax."
             exit 1
           }
       
-          Write-Host "Pascal Analyzer completed successfully. Output saved to: $outputText"
+          $fileSize = (Get-Item $outputText).Length
+          Write-Host "Pascal Analyzer completed successfully. Output saved to: $outputText (Size: $fileSize bytes)"
           
       - name: Convert Pascal Analyzer output to SARIF
         shell: powershell
