@@ -35,7 +35,9 @@ jobs:
           }
 
           # Use rsvars.bat to load Delphi environment and then run MSBuild
-          $cmd = "cmd.exe /c `"$rsvarsPath && msbuild `"$dprojPath`" /p:Config=Release /p:Platform=Win32`""
+          $cmd = "`"$rsvarsPath`" && msbuild `"$dprojPath`" /p:Config=Release /p:Platform=Win32"
+          cmd.exe /c $cmd
+
           Write-Host "Running Delphi MSBuild with rsvars.bat..."
           Invoke-Expression $cmd
 
