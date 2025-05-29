@@ -111,3 +111,25 @@ jobs:
         with:
           name: pascal-analyzer-sarif
           path: MultiSubnetFailoverTest/results.sarif
+
+      - name: Upload HTML Report
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\artifacts"
+          if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html") {
+            Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" "$env:GITHUB_WORKSPACE\artifacts\"
+            Write-Host "HTML report saved to artifacts directory"
+          } else {
+            Write-Host "HTML report not found"
+          }
+
+      - name: Save SARIF Report
+        shell: powershell
+        run: |
+          if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif") {
+            Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" "$env:GITHUB_WORKSPACE\artifacts\"
+            Write-Host "SARIF report saved to artifacts directory"
+            Get-Content "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" | Write-Host
+          } else {
+            Write-Host "SARIF report not found"
+          }
