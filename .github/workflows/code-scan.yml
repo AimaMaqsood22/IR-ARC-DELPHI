@@ -33,8 +33,9 @@ jobs:
             exit 1
           }
 
-          # Proper CMD string with quoted paths
-          $cmd = "`"`"$rsvarsPath`"`" && msbuild `"`"$dprojPath`"`" /p:Config=Release /p:Platform=Win32"
+          # Proper command line for CMD: no double-double-quotes!
+          $cmd = "`"$rsvarsPath`" && msbuild `"$dprojPath`" /p:Config=Release /p:Platform=Win32"
+
           Write-Host "Running Delphi MSBuild with rsvars.bat..."
           cmd.exe /c $cmd
 
@@ -43,7 +44,8 @@ jobs:
             exit $LASTEXITCODE
           }
 
-          Write-Host "Compilation completed successfully!"
+          Write-Host " Compilation completed successfully!"
+
 
 
       - name: Run Pascal Analyzer (HTML + SARIF)
