@@ -46,14 +46,28 @@ jobs:
 
           Write-Host " Compilation completed successfully!"
 
-
-
-      - name: Run Pascal Analyzer (HTML + SARIF)
+      - name: Run Pascal Analyzer
+        shell: powershell
         run: |
-          & "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe" `
-            /PROJECT="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr" `
-            /OUTPUT="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" `
-            /SARIF="$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
+          $projectPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\Project1.dpr"
+          $outputHtml = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html"
+          $outputSarif = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
+          $palcmdPath = "C:\Program Files\Peganza\Pascal Analyzer Eval 9\palcmd.exe"
+      
+          if (-not (Test-Path $palcmdPath)) {
+            Write-Host "ERROR: palcmd.exe not found at: $palcmdPath"
+            exit 1
+          }
+      
+          & "$palcmdPath" "$projectPath" /OUTPUT:"$outputHtml" /SARIF:"$outputSarif"
+      
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: Pascal Analyzer failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+      
+          Write-Host " Pascal Analyzer completed successfully."
+
 
       - name: Upload HTML Report
         shell: powershell
