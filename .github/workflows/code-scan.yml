@@ -59,7 +59,7 @@ jobs:
             exit 1
           }
       
-          & "$palcmdPath" "$projectPath" /OUTPUT:"$outputHtml" /SARIF:"$outputSarif"
+           & "$palcmdPath" "$projectPath" /TEXT:"$outputText"
       
           if ($LASTEXITCODE -ne 0) {
             Write-Host "ERROR: Pascal Analyzer failed with exit code $LASTEXITCODE"
@@ -69,24 +69,45 @@ jobs:
           Write-Host " Pascal Analyzer completed successfully."
 
 
-      - name: Upload HTML Report
+      - name: Convert Pascal Analyzer output to SARIF
         shell: powershell
         run: |
-          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\artifacts"
-          if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html") {
-            Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.html" "$env:GITHUB_WORKSPACE\artifacts\"
-            Write-Host "HTML report saved to artifacts directory"
-          } else {
-            Write-Host "HTML report not found"
+          $modulePath = "C:\Program Files\WindowsPowerShell\Modules\ConvertToSARIF\1.0.0"
+      
+          if (-not (Test-Path "$modulePath\ConvertToSARIF.psd1")) {
+            Write-Host "ERROR: ConvertToSARIF.psd1 not found"
+            exit 1
           }
+      
+          # Import using the manifest (.psd1)
+          Import-Module "$modulePath\ConvertToSARIF.psd1" -Force
+      
+          $textOutputPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\analysis-output.txt"
+          $sarifOutputPath = "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif"
+      
+          $lines = Get-Content $textOutputPath
+      
+          # Transform Pascal Analyzer output to a compatible object array (mock example)
+          $results = foreach ($line in $lines) {
+            if ($line -match "^(.+)\((\d+)\):\s+(.+)$") {
+              [PSCustomObject]@{
+                RuleName = "PascalAnalyzerFinding"
+                Message  = $matches[3]
+                Line     = [int]$matches[2]
+                Path     = $matches[1]
+                Severity = "Warning"
+              }
+            }
+          }
+      
+          # Use ConvertTo-SARIF (from the module)
+          $results | ConvertTo-SARIF -FilePath $sarifOutputPath
+      
+          Write-Host "SARIF report generated at $sarifOutputPath"
 
-      - name: Save SARIF Report
-        shell: powershell
-        run: |
-          if (Test-Path "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif") {
-            Copy-Item "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" "$env:GITHUB_WORKSPACE\artifacts\"
-            Write-Host "SARIF report saved to artifacts directory"
-            Get-Content "$env:GITHUB_WORKSPACE\MultiSubnetFailoverTest\results.sarif" | Write-Host
-          } else {
-            Write-Host "SARIF report not found"
-          }
+
+      - name: Upload SARIF Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: pascal-analyzer-sarif
+          path: MultiSubnetFailoverTest/results.sarif
